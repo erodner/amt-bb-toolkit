@@ -1,0 +1,23 @@
+This is a set of tools for bounding box annotation with Amazon MTURK
+
+Initial version by Subranshu Maji
+    modified by Erik Rodner 2013
+
+Erik dot Rodner at gmail dot com
+
+
+Install: 
+(1) follow the instructions on http://ttic.uchicago.edu/~smaji/projects/mturk/ and install the developer tools for MTURK
+(2) edit config.sh and the paths therein
+(3) setup the MTURK job (this is the tricky part)
+    an example can be found in example/
+
+    Basically, you have to do the following:
+        - upload the webpage/ files to your webserver
+        - rename all images into short filenames, e.g. 0322.jpg (this is necessary due to annoying parameter length limitations)
+        - create the test.input file using the list2mturkinput.py script
+        - update the path to your webserver in the configuration files
+        - change the cost parameter (the current setting assumes that 10 bounding have to be annotated by each turker and three independent turkers are annotating each image)
+        - test everything in the mturk sandbox
+            - if the job is complete, use the analyze*.py script to obtain bounding box annotations
+              (this script takes also care about the merging)
