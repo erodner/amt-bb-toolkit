@@ -1,0 +1,354 @@
+<html>
+	<!--
+     HTML backend for bounding box drawing 
+	   Uses "Canvas 2D" only (works on the latest IE, firefox, opera, safari browsers
+	 
+     Author : Erik Rodner
+
+     adapted from a polygon drawing code of Subhransu Maji
+	 -->
+	
+	<title>AMT : Image Segmentation</title>
+	<head>
+		<style type="text/css">
+		.xlink {cursor:default}
+		.hlink {cursor:help}
+    .borderincomplete {border:10px;border-color:LightGray;border-style:solid}
+    .bordercomplete {border:10px;border-color:Green;border-style:solid}
+		</style>
+		<!--[if IE]><script type="text/javascript" src="excanvas.js"></script><![endif]-->
+		<script type="text/javascript">
+
+      //sandbox mode
+      var sandboxMode = false;
+
+      //preview mode
+      var previewMode = false; // set to true at the end
+
+			//global variables for the page
+			var linecolor = "red";
+			var linewidth = 4.0;
+			var pt_size   = 4.0;
+			var pt_color  = "black";
+      var border_size = 10; // this needs to be consistent with above CSS setting
+
+      function BoundingBoxCanvas ( imgfn, width, height, canvasid ) {
+ 
+        // tokenize the category and image name based on comma
+        this.image_name    = imgfn;
+
+        this.CANVAS_WIDTH  = width;
+			  this.CANVAS_HEIGHT = height;
+
+        //change the base url to point to where the images are located
+        this.base_url = "images";
+        
+        // bounding box coordinates
+        this.x1 = -1;
+        this.y1 = -1;
+        this.x2 = -1;
+        this.y2 = -1;
+
+        // nothing selected? 0
+        // first point selected? 1
+        // second point selected? 2
+        this.current_mode = 0;
+			
+        // top level initialization of the canvas
+        this.img = new Image();
+
+        //construct the image source from the url parameters 
+        this.img.src = this.base_url + '/' + this.image_name;
+      
+        
+        this.canvas_fix = document.getElementById(canvasid);
+        this.canvas_fix.width = this.CANVAS_WIDTH;
+        this.canvas_fix.height = this.CANVAS_HEIGHT;
+
+        // damn IE fix with excanvas.js
+        var IE = document.all?true:false;
+        if (IE) { 
+          this.canvas_fix = G_vmlCanvasManager.initElement(this.canvas_fix);
+        }
+
+        this.border_fix =  this.canvas_fix;
+        this.border_fix.className = "borderincomplete";
+
+        this.ctx = this.canvas_fix.getContext("2d");
+
+
+        // reset the annotation
+        this.reset_annotation = function(){
+          this.current_mode = 0;
+          this.draw_canvas();
+          this.border_fix.className = "borderincomplete";
+        }
+        
+        
+        // draw the box 
+        this.draw_polygon = function(){
+          if ( this.current_mode > 0 )
+          {
+            this.ctx.strokeStyle = linecolor;
+            this.ctx.lineWidth = linewidth;
+            this.ctx.beginPath();
+            this.ctx.moveTo(this.x1,this.y1);
+            this.ctx.lineTo(this.x1,this.y2);
+            this.ctx.lineTo(this.x2,this.y2);
+            this.ctx.lineTo(this.x2,this.y1);
+            this.ctx.lineTo(this.x1,this.y1);
+            this.ctx.stroke();
+
+            this.ctx.fillRect(this.x2-pt_size,this.y2-pt_size,2*pt_size,2*pt_size);
+            this.ctx.fillRect(this.x1-pt_size,this.y1-pt_size,2*pt_size,2*pt_size);
+          }
+        }
+ 
+        // draw canvas
+        this.draw_canvas = function() {
+          //draw the image
+          this.ctx.clearRect(0,0,this.CANVAS_WIDTH,this.CANVAS_HEIGHT);
+          this.draw_image();				
+          this.draw_polygon();
+        }
+                               
+        // GUI input handling
+        this.grab_xy = function(event){
+          var ev = event || window.event;
+          
+          var IE = document.all?true:false;
+          if (IE) { // grab the x-y pos if browser is IE
+            cx = ev.clientX + document.body.scrollLeft;
+            cy = ev.clientY + document.body.scrollTop;
+          }
+          else {  // grab the x-y pos if browser is NS
+            cx = ev.pageX;
+            cy = ev.pageY;
+          }  
+          cx = cx - this.canvas_fix.offsetLeft - border_size;
+          cy = cy - this.canvas_fix.offsetTop - border_size;
+          if (cx < 0){cx = 0;}
+          if (cy < 0){cy = 0;}
+          if (cx > this.CANVAS_WIDTH) {cx = this.CANVAS_WIDTH};
+          if (cy > this.CANVAS_HEIGHT){cy = this.CANVAS_HEIGHT};
+            
+          return [cx,cy];
+        }
+
+        this.draw_image = function() {
+          if (typeof this.ctx != 'undefined')
+          {
+            this.ctx.drawImage(this.img,0,0,this.CANVAS_WIDTH, this.CANVAS_HEIGHT);
+          }
+        }
+
+        // what to submit to AMT server
+        this.get_results_string = function() {
+          var result = this.image_name;
+          result +=  "," + this.x1 + "," + this.y1 + "," + this.x2 + "," + this.y2;
+          return result;
+        }
+      }
+
+      function mouseup_canvas (event)
+        {
+          var xy = this.grab_xy(event);
+          if ( this.current_mode == 0 )
+          {
+            if ( previewMode ) {
+              alert("Please accept this HIT before annotating the images");
+            } else {
+              // selection of the top left corner (or whatever corner)
+              this.x1 = xy[0];
+              this.y1 = xy[1];
+              this.x2 = this.x1;
+              this.y2 = this.y1;
+              this.current_mode = 1;
+            }
+          } 
+          else if ( this.current_mode == 1 )
+          {
+            this.x2 = xy[0];
+            this.y2 = xy[1];
+            this.current_mode = 2;
+            this.border_fix.className = "bordercomplete";
+          }
+          this.draw_canvas();
+        }
+ 
+      //update the current location of the keypoint
+      function mousemove_canvas (event)
+        {
+          if ( this.current_mode == 1 )
+          {
+            var xy = this.grab_xy(event);
+            this.x2 = xy[0];
+            this.y2 = xy[1];
+            this.draw_canvas();
+          }
+        }
+
+
+      function register_canvas( canvas, resetid )
+      {
+        canvas.canvas_fix.onmousemove = function(event) { mousemove_canvas.call(canvas,event); }
+        canvas.canvas_fix.onmouseup   = function(event) { mouseup_canvas.call(canvas,event) };
+        canvas.img.onload = function(event) {  canvas.draw_canvas(); }
+
+
+        document.getElementById(resetid).onclick = function(event) { canvas.reset_annotation.call(canvas); };
+      }
+
+    
+      /// functions related to AMT task
+      function gup(name){
+        var regexS = "[\\?&]"+name+"=([^&#]*)";
+        var regex = new RegExp( regexS, "i" );
+        var tmpURL = window.location.href;
+        var results = regex.exec( tmpURL );
+        if( results == null )
+          return "";
+        else
+          return results[1];
+      }
+
+			// grab the results and submit to the server
+			function submitResults(){
+        var results = ""
+        for (i=0;i<canvas_table.length;i++)
+        {
+          canvas = canvas_table[i];
+				  if (canvas.current_mode != 2) {
+					  alert("Please finish drawing the boxes before clicking on submit!");
+					  return;
+          }
+          if ( i==0 )
+          {
+				    results = canvas.get_results_string();
+          } else {
+				    results = results + "," + canvas.get_results_string();
+          }
+        }
+				
+        if ( results.length > 0 )
+        {
+				  document.getElementById('bb').value = results;
+				  document.forms["mturk_form"].submit();
+          alert(document.forms["mturk_form"].action);
+        } else {
+          alert("Unable to submit results your browser seems to be incompatible.");
+        }
+			}
+			
+      
+      // handling of multiple canvases
+      var canvas_table;
+
+      function init_canvas_table()
+      {
+			  canvas_table = new Array();
+        var images = decodeURIComponent( gup('images') );
+        var imagelist = images.split(';');
+        
+        for (var i in imagelist)
+        {
+          var imageinfo = imagelist[i];
+          var tokens = imageinfo.split(',');
+          var category_name = tokens[0].replace( "_", " " );
+          var imgfn = tokens[1];
+          var width = tokens[2];
+          var height = tokens[3];
+
+          canvasid = "segmentation_canvas_" + i;
+          resetid = "reset_" + i;
+          document.write('<center>');
+          document.write('<h3>Draw a box around the ');
+          document.write(category_name);
+          document.write('!</h3>');
+          document.write('<canvas id="' + canvasid + '" width=450 height=450></canvas>');
+          document.write('</center>');
+          document.write('<br>');
+          document.write('<input name="Remove Box" value="Remove Box" type="button" id="' + resetid + '">');
+          document.write('<hr>');
+
+
+          canvas = new BoundingBoxCanvas( imgfn, width, height, canvasid );
+          canvas_table.push ( canvas );
+          register_canvas(canvas, resetid);
+        } 
+      }
+	</script>
+	</head>
+	<body>
+	<div align=center ><h3 style="color:green">Draw a box around an object in a given image</h3></div>
+	
+  Instructions: 
+  In this project, we will show you some pictures. You will get a target object. In each picture, you should
+  search for that object and draw a <b>tight</b> box around it.
+  <ul>
+    <li>For example: In this picture, your target is backpack.</li>
+      <center><img width=200px src=incomplete.png></center>
+    <li>Search and find the backpack in the picture, and then draw a box around it, such that no part of the object is outside of the box.</li>
+      <center><img width=200px src=complete.png></center>
+    <li>To draw the box, use the computer's mouse and <b>two clicks</b> for the top left and the bottom right corner of the box</li>
+    <li>If there is more than one object, select the one which is in the center of the image.</li>
+    <li><b>Ignore cables, cords and shadows of an object.</b></li>
+  </ul>
+  <hr>
+
+	<div style="text-align:center;" class="xlink">
+	<script type="text/javascript">
+  init_canvas_table();
+  </script>
+  </div>;
+
+
+  <div align=center>
+		<table width=420> 
+			<tr align=center><td>
+				<form id="mturk_form" method="POST" action="https://www.mturk.com/mturk/externalSubmit">
+					<input type="hidden" id="assignmentId" name="assignmentId" value="">
+					<input type="hidden" id="bb" name="results" value="">
+					<input type="hidden" id="browserInfo" name="browserInfo" value="">
+					<input id="submitButton" type="button" name="Submit Results" value="Submit Results" onClick="submitResults()">
+				</form>
+			</td></tr>
+		</table>
+	</div>
+
+  <script type="text/javascript">
+    // Upper-case operation is necessary to overcome webservers with URL rewrite to lowercase policies
+    var aid = gup('assignmentId').toUpperCase();
+		document.getElementById('assignmentId').value = aid;
+
+    document.getElementById('browserInfo').value = navigator.userAgent;
+
+    // check if the canvas things are working
+    if ( canvas_table.length == 0 ) {
+			document.getElementById('submitButton').disabled = true;
+      document.getElementById('submitButton').value = "Your browser seems to be incompatible with this task. Sorry!";
+    }
+
+		//
+		// Check if the worker is PREVIEWING the HIT or if they've ACCEPTED the HIT
+		//
+		if (aid == "ASSIGNMENT_ID_NOT_AVAILABLE")
+		{
+			// If we're previewing, disable the button and give it a helpful message
+			document.getElementById('submitButton').disabled = true;
+			document.getElementById('submitButton').value = "You must ACCEPT the HIT before you can submit the results.";
+
+      previewMode = true;
+		} else {
+      // change the submission server when in sandbox mode
+      if (sandboxMode) {
+        alert("You are in sandbox mode now!");
+			  var form = document.getElementById('mturk_form');
+				form.action = "https://workersandbox.mturk.com/mturk/externalSubmit";
+			}
+		}
+	</script>
+	
+	
+	</body>
+</html>
